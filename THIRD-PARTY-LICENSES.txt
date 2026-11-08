@@ -1,0 +1,1 @@
+No se usan bibliotecas de terceros en tiempo de ejecución. La visualización 3D se dibuja con Canvas 2D estándar y código local del proyecto. Imágenes del sitio son ilustrativas y no muestran obras verificadas de Construhogar.
