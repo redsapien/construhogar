@@ -261,24 +261,29 @@ body{background:#040b16}.header{background:#06101df2;border-color:#72b5ff24}.nav
     ctx.strokeStyle='rgba(238,159,86,.54)';ctx.lineWidth=1;const c=18;[[12,12,1,1],[W-12,12,-1,1],[12,H-12,1,-1],[W-12,H-12,-1,-1]].forEach(([x,y,dx,dy])=>{ctx.beginPath();ctx.moveTo(x+dx*c,y);ctx.lineTo(x,y);ctx.lineTo(x,y+dy*c);ctx.stroke()});
   }
   if(canvas&&ctx){try{
-    if('ResizeObserver'in window)new ResizeObserver(fitCanvas).observe(canvas);window.addEventListener('resize',fitCanvas,{passive:true});
+    if('ResizeObserver'in window)new ResizeObserver(fitCanvas).observe(canvas);
+    window.addEventListener('resize',fitCanvas,{passive:true});
     const reduce=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    state.animStart=performance.now();state.orbitStart=state.animStart+3900;
-    const animate=(now)=>{if(!canvas.isConnected)return;const elapsed=now-state.animStart;
-      if(reduce){state.reveal=1;state.animating=false;drawHouse();return}
-      state.reveal=Math.max(0,Math.min(1,elapsed/3400));
-      if(elapsed>=3400&&elapsed<5800&&!state.drag){const t=(elapsed-3400)/2400;state.angle=.52+.2*Math.sin(t*Math.PI*2)}
+    state.reveal=1;state.animating=false;fitCanvas();
+    let hasPlayed=false;
+    const animate=(now)=>{if(!canvas.isConnected||!state.animating)return;
+      const elapsed=now-state.animStart;state.reveal=Math.max(0,Math.min(1,elapsed/3400));
+      if(elapsed>=3400&&elapsed<5800){const t=(elapsed-3400)/2400;state.angle=.52+.2*Math.sin(t*Math.PI*2)}
       if(elapsed>=5800){state.reveal=1;state.angle=.52;state.animating=false;drawHouse();return}
       drawHouse();state.raf=requestAnimationFrame(animate)};
-    requestAnimationFrame(animate);window.addEventListener('visibilitychange',()=>{if(document.hidden&&state.raf)cancelAnimationFrame(state.raf);else if(!document.hidden&&state.animating)state.raf=requestAnimationFrame(animate)})
+    const startAssembly=()=>{if(hasPlayed||reduce)return;hasPlayed=true;state.animating=true;state.reveal=0;state.animStart=performance.now();state.raf=requestAnimationFrame(animate)};
+    if(!reduce&&'IntersectionObserver'in window){const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){startAssembly();observer.disconnect()}},{threshold:.2});observer.observe(canvas)}
+    else if(!reduce)startAssembly();
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.raf)cancelAnimationFrame(state.raf);else if(!document.hidden&&state.animating)state.raf=requestAnimationFrame(animate)});
   }catch(err){console.warn('No se pudo mostrar la maqueta:',err);$('#home-viewer')?.classList.add('is-fallback')}}else{$('#home-viewer')?.classList.add('is-fallback')}
-  $$('[data-view]').forEach(btn=>btn.addEventListener('click',()=>{const v=btn.dataset.view;state.angle=v==='front'?0:v==='side'?1.4:v==='top'?0:.56;state.tilt=v==='top'?1.18:.68;state.zoom=v==='top'?1.06:1.02;$$('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));drawHouse()}));
+  const finishAssembly=()=>{if(!state.animating)return;state.animating=false;if(state.raf)cancelAnimationFrame(state.raf);state.reveal=1;drawHouse()};
+  $$('[data-view]').forEach(btn=>btn.addEventListener('click',()=>{finishAssembly();const v=btn.dataset.view;state.angle=v==='front'?0:v==='side'?1.4:v==='top'?0:.56;state.tilt=v==='top'?1.18:.68;state.zoom=v==='top'?1.06:1.02;$$('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));drawHouse()}));
   if(canvas){const pointers=new Map();let lastDistance=0;
     const distance=()=>{const pts=[...pointers.values()];return pts.length>1?Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y):0};
-    canvas.addEventListener('pointerdown',e=>{pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});lastDistance=distance();try{canvas.setPointerCapture(e.pointerId)}catch(_){}});
+    canvas.addEventListener('pointerdown',e=>{finishAssembly();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});lastDistance=distance();try{canvas.setPointerCapture(e.pointerId)}catch(_){}});
     canvas.addEventListener('pointermove',e=>{const prev=pointers.get(e.pointerId);if(!prev)return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>=2){const d=distance();if(lastDistance>0&&d>0)state.zoom=Math.max(.62,Math.min(1.7,state.zoom*d/lastDistance));lastDistance=d}else{state.angle+=(e.clientX-prev.x)*.008;state.tilt=Math.max(-.6,Math.min(1.25,state.tilt+(e.clientY-prev.y)*.004))}drawHouse()});
     for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{pointers.delete(e.pointerId);lastDistance=distance()});
-    canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.62,Math.min(1.7,state.zoom*(e.deltaY>0?.94:1.06)));drawHouse()},{passive:false});
+    canvas.addEventListener('wheel',e=>{finishAssembly();e.preventDefault();state.zoom=Math.max(.62,Math.min(1.7,state.zoom*(e.deltaY>0?.94:1.06)));drawHouse()},{passive:false});
   }
 
   const monthLabel=$('#calendar-month'),grid=$('#calendar-grid'),pickedDate=$('#visit-date'),pickedTime=$('#visit-time');
